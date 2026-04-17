@@ -24,13 +24,12 @@ st.markdown("""
     p, div, label { font-size: 22px !important; }
     h3 { font-size: 28px !important; margin-top: 25px !important; }
     
-    /* Estilos para el banner post-procesamiento */
-    .patrocinador-exito { 
+    /* Estilos para el banner permanente */
+    .patrocinador-caja { 
         background-color: #f1f5f9; 
         padding: 15px; 
         border-radius: 10px; 
         text-align: center; 
-        margin-top: 10px;
         margin-bottom: 20px;
         border: 2px dashed #cbd5e1;
     }
@@ -45,9 +44,6 @@ if "texto_acumulado" not in st.session_state:
     st.session_state.texto_acumulado = ""
 if "historial" not in st.session_state:
     st.session_state.historial = []
-# NUEVA VARIABLE: Para saber cuándo mostrar el banner de éxito
-if "mostrar_anuncio" not in st.session_state:
-    st.session_state.mostrar_anuncio = False
 
 def guardar_pasado():
     st.session_state.historial.append(st.session_state.texto_acumulado)
@@ -65,16 +61,17 @@ def guardar_edicion_manual():
     st.session_state.texto_acumulado = st.session_state.editor_texto
 
 # ==========================================
-# FUNCIONES DE INTELIGENCIA ARTIFICIAL
+# FUNCIONES DE INTELIGENCIA ARTIFICIAL (CON COMPRESIÓN)
 # ==========================================
 def procesar_imagenes_lote(lista_archivos_imagen):
     try:
         imagenes_listas = []
         for img_file in lista_archivos_imagen:
             img = Image.open(img_file)
+            
+            # Compresión de imágenes para mayor velocidad
             if img.mode in ("RGBA", "P"): 
                 img = img.convert("RGB")
-            
             max_size = 1280
             if max(img.size) > max_size:
                 img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
@@ -119,18 +116,42 @@ def generar_voz(texto):
         return None 
 
 # ==========================================
-# INTERFAZ PRINCIPAL
+# INTERFAZ PRINCIPAL Y BANNER FIJO
 # ==========================================
 st.title("📝 TextoListo")
 st.write("Convierte fotos o voz en texto limpio.")
 
+# --- BANNER PUBLICITARIO SIEMPRE VISIBLE ---
+st.markdown("---")
+st.markdown("""
+<div class='patrocinador-caja'>
+    <p class='texto-oscuro' style='font-size: 16px !important; margin-bottom: 2px;'>🎉 Herramienta gratuita gracias a:</p>
+    <h4 class='texto-oscuro' style='margin-top: 0px !important;'>Clínica Visión Clara</h4>
+</div>
+""", unsafe_allow_html=True)
+
+col1, col2 = st.columns([1, 2], gap="small", vertical_alignment="center")
+with col1:
+    st.image("https://images.unsplash.com/photo-1505751172876-fa1923c5c528?q=80&w=300&auto=format&fit=crop", use_container_width=True)
+with col2:
+    wpp_patrocinador = urllib.parse.quote("Hola, vi su anuncio en la aplicación TextoListo y me gustaría pedir informes.")
+    enlace_contacto_patrocinador = f"https://api.whatsapp.com/send?text={wpp_patrocinador}"
+    st.link_button("📞 Agendar cita de valoración", enlace_contacto_patrocinador, use_container_width=True)
+st.markdown("---")
+
+# --- FLUJO DE LA APLICACIÓN ---
 st.info("🔒 **Consejo:** No tomes fotos de tarjetas o contraseñas.")
 
 st.markdown("### 🛑 Paso 1: Permiso de Seguridad")
 acepto_privacidad = st.checkbox("✅ Acepto que la computadora me ayude procesando mis fotos o voz.")
 
-with st.expander("👀 Ver detalles de privacidad"):
-    st.write("Sus datos se procesan temporalmente y no se guardan en ninguna base de datos.")
+# --- TEXTO LEGAL BLINDADO ---
+with st.expander("👀 Ver detalles legales y de privacidad"):
+    st.markdown("""
+    **1. Privacidad de Datos (LFPDPPP):** Sus imágenes y audios se procesan temporalmente de forma cifrada mediante Inteligencia Artificial y NO se guardan en ninguna base de datos. Todo se elimina automáticamente al cerrar la página.
+    
+    **2. Publicidad y Responsabilidad:** *TextoListo* es una herramienta independiente que se mantiene gratuita gracias a nuestros patrocinadores. *TextoListo* opera únicamente como espacio de difusión publicitaria y no se hace responsable por la calidad, permisos, tarifas o cumplimiento de los servicios médicos, legales o comerciales que los anunciantes ofrecen de manera externa.
+    """)
 
 st.divider()
 
@@ -140,12 +161,11 @@ if audio_grabado:
     if not acepto_privacidad:
         st.error("🚨 Por favor, acepta el permiso en el Paso 1.")
     else:
-        # ANUNCIO DURANTE LA ESPERA (AUDIO)
+        # TRANSPARENCIA EN EL SPINNER
         with st.spinner("⏳ Escuchando... Patrocinado por Clínica Visión Clara."):
             texto = procesar_audio(audio_grabado)
             agregar_texto(texto)
             st.success("¡Agregado!")
-            st.session_state.mostrar_anuncio = True
 
 st.divider()
 
@@ -160,7 +180,7 @@ if archivos_subidos and st.button("✅ PROCESAR", type="secondary", use_containe
     if not acepto_privacidad:
         st.error("🚨 Acepta el permiso en el Paso 1.")
     else:
-        # ANUNCIO DURANTE LA ESPERA (FOTOS)
+        # TRANSPARENCIA EN EL SPINNER
         with st.spinner("⏳ Leyendo documentos... Servicio gratuito gracias a Clínica Visión Clara."):
             textos_nuevos = []
             imagenes_a_procesar = []
@@ -179,27 +199,6 @@ if archivos_subidos and st.button("✅ PROCESAR", type="secondary", use_containe
             if textos_nuevos:
                 agregar_texto("\n\n".join([t for t in textos_nuevos if not t.startswith("⚠️")]))
                 st.success("¡Texto extraído con éxito!")
-                st.session_state.mostrar_anuncio = True
-
-# ==========================================
-# BANNER DE PATROCINIO (Solo aparece si hubo éxito)
-# ==========================================
-if st.session_state.mostrar_anuncio:
-    st.markdown("""
-    <div class='patrocinador-exito'>
-        <p class='texto-oscuro' style='font-size: 16px !important; margin-bottom: 2px;'>🎉 Herramienta gratuita gracias a:</p>
-        <h4 class='texto-oscuro' style='margin-top: 0px !important;'>Clínica Visión Clara</h4>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col1, col2 = st.columns([1, 2], gap="small", vertical_alignment="center")
-    with col1:
-        st.image("https://images.unsplash.com/photo-1505751172876-fa1923c5c528?q=80&w=300&auto=format&fit=crop", use_container_width=True)
-    with col2:
-        wpp_patrocinador = urllib.parse.quote("Hola, acabo de usar la aplicación TextoListo y me gustaría pedir informes.")
-        enlace_contacto_patrocinador = f"https://api.whatsapp.com/send?text={wpp_patrocinador}"
-        st.link_button("📞 Agendar cita de valoración", enlace_contacto_patrocinador, use_container_width=True)
-    st.divider()
 
 # ==========================================
 # REVISIÓN Y ENVÍO
@@ -210,7 +209,6 @@ if st.session_state.texto_acumulado.strip():
     if st.session_state.historial:
         if st.button("↩️ Borrar lo último"):
             st.session_state.texto_acumulado = st.session_state.historial.pop()
-            st.session_state.mostrar_anuncio = False # Oculta el anuncio si borra
             st.rerun()
 
     texto_final = st.text_area("Mensaje:", value=st.session_state.texto_acumulado.strip(), height=300, key="editor_texto", on_change=guardar_edicion_manual)
@@ -219,6 +217,7 @@ if st.session_state.texto_acumulado.strip():
         with st.spinner("⏳ Preparando audio..."):
             audio_generado = generar_voz(texto_final)
             if audio_generado:
+                # FIX PARA IPHONE
                 st.info("👇 Toca el botón de 'Play' abajo para escuchar:")
                 st.audio(audio_generado, format='audio/mpeg')
             else:
@@ -231,5 +230,4 @@ if st.session_state.texto_acumulado.strip():
     if st.button("🗑️ Borrar TODO"):
         st.session_state.texto_acumulado = ""
         st.session_state.historial = []
-        st.session_state.mostrar_anuncio = False # Resetea el anuncio
         st.rerun()
