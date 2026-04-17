@@ -23,8 +23,18 @@ st.markdown("""
     .stTextArea textarea { font-size: 24px !important; line-height: 1.6; }
     p, div, label { font-size: 22px !important; }
     h3 { font-size: 28px !important; margin-top: 25px !important; }
-    /* Estilos para que el anuncio se vea bien integrado */
-    .patrocinador-caja { background-color: #f0f2f6; padding: 15px; border-radius: 10px; text-align: center; margin-bottom: 20px;}
+    
+    /* Estilos para el banner post-procesamiento */
+    .patrocinador-exito { 
+        background-color: #f1f5f9; 
+        padding: 15px; 
+        border-radius: 10px; 
+        text-align: center; 
+        margin-top: 10px;
+        margin-bottom: 20px;
+        border: 2px dashed #cbd5e1;
+    }
+    .texto-oscuro { color: #0f172a !important; margin-bottom: 5px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -35,6 +45,9 @@ if "texto_acumulado" not in st.session_state:
     st.session_state.texto_acumulado = ""
 if "historial" not in st.session_state:
     st.session_state.historial = []
+# NUEVA VARIABLE: Para saber cuándo mostrar el banner de éxito
+if "mostrar_anuncio" not in st.session_state:
+    st.session_state.mostrar_anuncio = False
 
 def guardar_pasado():
     st.session_state.historial.append(st.session_state.texto_acumulado)
@@ -42,7 +55,6 @@ def guardar_pasado():
 def agregar_texto(texto_nuevo):
     if not texto_nuevo or texto_nuevo.startswith("⚠️"):
         return
-
     guardar_pasado()
     if st.session_state.texto_acumulado == "":
         st.session_state.texto_acumulado = texto_nuevo
@@ -57,36 +69,45 @@ def guardar_edicion_manual():
 # ==========================================
 def procesar_imagenes_lote(lista_archivos_imagen):
     try:
-        imagenes = [Image.open(img_file) for img_file in lista_archivos_imagen]
+        imagenes_listas = []
+        for img_file in lista_archivos_imagen:
+            img = Image.open(img_file)
+            if img.mode in ("RGBA", "P"): 
+                img = img.convert("RGB")
+            
+            max_size = 1280
+            if max(img.size) > max_size:
+                img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+            
+            imagenes_listas.append(img)
+
         prompt = """Extrae todo el texto de estas imágenes de forma clara y limpia. Corrige ortografía. 
         SI ENCUENTRAS TABLAS O CIFRAS: Conviértelas en una lista fácil de leer renglón por renglón.
         Devuelve SOLO el texto, sin saludos ni explicaciones."""
         
-        contenido = [prompt] + imagenes
+        contenido = [prompt] + imagenes_listas
         respuesta = model.generate_content(contenido)
         return respuesta.text
     except Exception as e:
-        return "⚠️ Lo siento, hubo un problema al leer las fotos. Por favor revisa que las imágenes sean claras o intenta subir menos fotos a la vez."
+        return "⚠️ Problema al leer las fotos. Revisa que sean claras o intenta subir menos a la vez."
 
 def procesar_audio(audio_file):
     try:
         audio_data = {"mime_type": audio_file.type, "data": audio_file.getvalue()}
-        prompt = "Transcribe este audio. Quita muletillas y corrige la ortografía. Devuelve SOLO el texto, sin saludos."
+        prompt = "Transcribe este audio. Quita muletillas y corrige la ortografía. Devuelve SOLO el texto."
         respuesta = model.generate_content([prompt, audio_data])
         return respuesta.text
     except Exception as e:
-        return "⚠️ Hubo un problema al escuchar el audio. Intenta grabar de nuevo."
+        return "⚠️ Hubo un problema al escuchar el audio."
 
 def procesar_pdf(pdf_file):
     try:
         pdf_data = {"mime_type": "application/pdf", "data": pdf_file.getvalue()}
-        prompt = """Lee este PDF. Extrae el texto de forma clara. 
-        SI ENCUENTRAS TABLAS O CIFRAS: Conviértelas en una lista fácil de leer renglón por renglón.
-        Devuelve SOLO el texto, sin saludos."""
+        prompt = "Lee este PDF. Extrae el texto de forma clara. Convierte tablas en listas. SOLO el texto."
         respuesta = model.generate_content([prompt, pdf_data])
         return respuesta.text
     except Exception as e:
-        return "⚠️ Hubo un error al leer el PDF. Asegúrate de que no esté protegido con contraseña."
+        return "⚠️ Hubo un error al leer el PDF."
 
 def generar_voz(texto):
     try:
@@ -98,148 +119,117 @@ def generar_voz(texto):
         return None 
 
 # ==========================================
-# SECCIÓN PATROCINADA (BARRA LATERAL)
-# ==========================================
-with st.sidebar:
-    st.markdown("### 🌟 Recomendado")
-    
-    # Aquí puedes cambiar la URL de la imagen por el logo de tu cliente
-    # Por ahora uso una imagen de ejemplo médica
-    st.image("https://images.unsplash.com/photo-1505751172876-fa1923c5c528?q=80&w=300&auto=format&fit=crop", use_container_width=True)
-    
-    st.markdown("""
-    <div class='patrocinador-caja'>
-        <h4>Clínica Visión Clara</h4>
-        <p style='font-size: 16px !important;'>Expertos en salud visual y cirugía de cataratas para adultos mayores.</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Enlace de WhatsApp para que el cliente reciba prospectos
-    wpp_patrocinador = urllib.parse.quote("Hola, vi su anuncio en la aplicación TextoListo y me gustaría pedir informes.")
-    enlace_contacto_patrocinador = f"https://api.whatsapp.com/send?text={wpp_patrocinador}"
-    
-    st.link_button("📞 Agendar cita de valoración", enlace_contacto_patrocinador, use_container_width=True)
-    
-    st.divider()
-    st.caption("TextoListo es una herramienta gratuita gracias al apoyo de nuestros patrocinadores.")
-    st.caption("¿Desea anunciarse aquí? [Contáctenos](tu_correo_o_enlace)")
-
-# ==========================================
-# INTERFAZ PRINCIPAL PARA EL ADULTO MAYOR
+# INTERFAZ PRINCIPAL
 # ==========================================
 st.title("📝 TextoListo")
-st.write("Convierte fotos, documentos o tu voz en texto limpio.")
-st.info("🔒 **Consejo:** No tomes fotos de tarjetas, contraseñas o datos del banco.")
+st.write("Convierte fotos o voz en texto limpio.")
 
-# --- CONSENTIMIENTO SIMPLIFICADO ---
+st.info("🔒 **Consejo:** No tomes fotos de tarjetas o contraseñas.")
+
 st.markdown("### 🛑 Paso 1: Permiso de Seguridad")
-acepto_privacidad = st.checkbox("✅ Acepto que la computadora escuche mi voz o lea mis fotos de forma segura para ayudarme.")
+acepto_privacidad = st.checkbox("✅ Acepto que la computadora me ayude procesando mis fotos o voz.")
 
-with st.expander("👀 Ver detalles de privacidad (Para familiares o asesores)"):
-    st.markdown("""
-    **Aviso de Privacidad Simplificado (LFPDPPP):** Esta herramienta tecnológica independiente no guarda sus datos, fotografías ni audios de voz en bases de datos. Todo se borra de manera automática al cerrar la página o presionar el botón de limpiar (Cero Persistencia). 
-    
-    Para poder transcribir o leer sus documentos, el sistema transfiere temporalmente y de forma cifrada las imágenes o audios a los sistemas de Inteligencia Artificial. Al marcar la casilla de aceptación, usted consiente de manera expresa este procesamiento temporal para su asistencia personal.
-    """)
+with st.expander("👀 Ver detalles de privacidad"):
+    st.write("Sus datos se procesan temporalmente y no se guardan en ninguna base de datos.")
+
 st.divider()
 
-# --- OPCIÓN 1: GRABAR VOZ ---
 st.subheader("🎙️ Paso 2: Dictar un mensaje")
 audio_grabado = st.audio_input("Toca el micrófono para hablar")
 if audio_grabado:
     if not acepto_privacidad:
-        st.error("🚨 **ATENCIÓN:** Por favor, toca la casilla de 'Acepto' arriba en el Paso 1 para poder escucharte.")
+        st.error("🚨 Por favor, acepta el permiso en el Paso 1.")
     else:
-        with st.spinner("⏳ Escuchando tu mensaje..."):
+        # ANUNCIO DURANTE LA ESPERA (AUDIO)
+        with st.spinner("⏳ Escuchando... Patrocinado por Clínica Visión Clara."):
             texto = procesar_audio(audio_grabado)
-            if texto.startswith("⚠️"):
-                st.error(texto)
-            else:
-                agregar_texto(texto)
-                st.success("¡Mensaje agregado!")
+            agregar_texto(texto)
+            st.success("¡Agregado!")
+            st.session_state.mostrar_anuncio = True
 
 st.divider()
 
-# --- OPCIÓN 2: LA SOLUCIÓN NATIVA PARA CÁMARA Y ARCHIVOS ---
 st.subheader("📷 Paso 3: Tomar Foto o Subir Documento")
-st.write("💡 Toca el botón de abajo. **Tu celular te preguntará si quieres abrir tu Cámara** o elegir una foto de tu galería.")
-
 archivos_subidos = st.file_uploader(
-    "Toca aquí para abrir cámara o archivos:", 
+    "Toca aquí:", 
     type=['png', 'jpg', 'jpeg', 'pdf', 'mp3', 'wav', 'm4a', 'ogg', 'opus'],
     accept_multiple_files=True 
 )
 
-if archivos_subidos and st.button("✅ PROCESAR DOCUMENTOS / FOTOS", type="secondary", use_container_width=True):
+if archivos_subidos and st.button("✅ PROCESAR", type="secondary", use_container_width=True):
     if not acepto_privacidad:
-        st.error("🚨 **ATENCIÓN:** Por favor, toca la casilla de 'Acepto' arriba en el Paso 1 para poder leer tus fotos o documentos.")
+        st.error("🚨 Acepta el permiso en el Paso 1.")
     else:
-        with st.spinner("⏳ Leyendo... no cierres la pantalla..."):
+        # ANUNCIO DURANTE LA ESPERA (FOTOS)
+        with st.spinner("⏳ Leyendo documentos... Servicio gratuito gracias a Clínica Visión Clara."):
             textos_nuevos = []
             imagenes_a_procesar = []
 
             for archivo in archivos_subidos:
-                tipo = archivo.type
-                if tipo.startswith("image/"): 
+                if archivo.type.startswith("image/"): 
                     imagenes_a_procesar.append(archivo)
-                elif tipo.startswith("audio/") or tipo in ["audio/ogg", "audio/opus"]: 
-                    resultado_audio = procesar_audio(archivo)
-                    if not resultado_audio.startswith("⚠️"):
-                        textos_nuevos.append(resultado_audio)
-                    else:
-                        st.error(resultado_audio)
-                elif tipo == "application/pdf": 
-                    resultado_pdf = procesar_pdf(archivo)
-                    if not resultado_pdf.startswith("⚠️"):
-                        textos_nuevos.append(resultado_pdf)
-                    else:
-                        st.error(resultado_pdf)
+                elif archivo.type.startswith("audio/"): 
+                    textos_nuevos.append(procesar_audio(archivo))
+                elif archivo.type == "application/pdf": 
+                    textos_nuevos.append(procesar_pdf(archivo))
             
             if imagenes_a_procesar:
-                resultado_imagenes = procesar_imagenes_lote(imagenes_a_procesar)
-                if not resultado_imagenes.startswith("⚠️"):
-                    textos_nuevos.append(resultado_imagenes)
-                else:
-                    st.error(resultado_imagenes)
+                textos_nuevos.append(procesar_imagenes_lote(imagenes_a_procesar))
             
             if textos_nuevos:
-                texto_unido = "\n\n".join(textos_nuevos)
-                agregar_texto(texto_unido)
+                agregar_texto("\n\n".join([t for t in textos_nuevos if not t.startswith("⚠️")]))
                 st.success("¡Texto extraído con éxito!")
+                st.session_state.mostrar_anuncio = True
+
+# ==========================================
+# BANNER DE PATROCINIO (Solo aparece si hubo éxito)
+# ==========================================
+if st.session_state.mostrar_anuncio:
+    st.markdown("""
+    <div class='patrocinador-exito'>
+        <p class='texto-oscuro' style='font-size: 16px !important; margin-bottom: 2px;'>🎉 Herramienta gratuita gracias a:</p>
+        <h4 class='texto-oscuro' style='margin-top: 0px !important;'>Clínica Visión Clara</h4>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2 = st.columns([1, 2], gap="small", vertical_alignment="center")
+    with col1:
+        st.image("https://images.unsplash.com/photo-1505751172876-fa1923c5c528?q=80&w=300&auto=format&fit=crop", use_container_width=True)
+    with col2:
+        wpp_patrocinador = urllib.parse.quote("Hola, acabo de usar la aplicación TextoListo y me gustaría pedir informes.")
+        enlace_contacto_patrocinador = f"https://api.whatsapp.com/send?text={wpp_patrocinador}"
+        st.link_button("📞 Agendar cita de valoración", enlace_contacto_patrocinador, use_container_width=True)
+    st.divider()
 
 # ==========================================
 # REVISIÓN Y ENVÍO
 # ==========================================
 if st.session_state.texto_acumulado.strip():
-    st.divider()
     st.subheader("👀 Paso 4: Revisa tu mensaje")
     
-    if len(st.session_state.historial) > 0:
-        if st.button("↩️ Me equivoqué, borrar lo último que agregué"):
+    if st.session_state.historial:
+        if st.button("↩️ Borrar lo último"):
             st.session_state.texto_acumulado = st.session_state.historial.pop()
+            st.session_state.mostrar_anuncio = False # Oculta el anuncio si borra
             st.rerun()
 
-    st.write("Toca el cuadro blanco si necesitas corregir alguna letra.")
+    texto_final = st.text_area("Mensaje:", value=st.session_state.texto_acumulado.strip(), height=300, key="editor_texto", on_change=guardar_edicion_manual)
     
-    texto_final = st.text_area("Mensaje listo:", value=st.session_state.texto_acumulado.strip(), height=300, key="editor_texto", on_change=guardar_edicion_manual)
-    
-    if st.button("🔊 Escuchar en voz alta"):
+    if st.button("🔊 Preparar Audio para Escuchar"):
         with st.spinner("⏳ Preparando audio..."):
             audio_generado = generar_voz(texto_final)
             if audio_generado:
-                st.audio(audio_generado, format='audio/mp3', autoplay=True)
+                st.info("👇 Toca el botón de 'Play' abajo para escuchar:")
+                st.audio(audio_generado, format='audio/mpeg')
             else:
-                st.error("⚠️ No se pudo generar la voz por un problema en internet. Intenta de nuevo.")
+                st.error("⚠️ Error de conexión al generar voz.")
 
     st.divider()
-    
-    mensaje_wpp = urllib.parse.quote(f"Hola, por favor ayúdame a pasar este texto a un Word e imprimirlo:\n\n{texto_final}")
-    enlace_wpp = f"https://api.whatsapp.com/send?text={mensaje_wpp}"
-    
-    st.link_button("✅ ENVIAR POR WHATSAPP", enlace_wpp, type="primary", use_container_width=True)
+    mensaje_wpp = urllib.parse.quote(f"Hola, por favor ayúdame a imprimir esto:\n\n{texto_final}")
+    st.link_button("✅ ENVIAR POR WHATSAPP", f"https://api.whatsapp.com/send?text={mensaje_wpp}", type="primary", use_container_width=True)
 
-    st.write("---")
-    if st.button("🗑️ Borrar TODO y empezar de cero"):
+    if st.button("🗑️ Borrar TODO"):
         st.session_state.texto_acumulado = ""
         st.session_state.historial = []
+        st.session_state.mostrar_anuncio = False # Resetea el anuncio
         st.rerun()
